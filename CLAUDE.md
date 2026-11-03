@@ -30,6 +30,17 @@ Our team builds ONE dashboard together. Each person owns one section of it.
 
 ## Our team's plan
 
-(Once you've decided, ask Claude to write your plan here: what you're watching,
-what triggers an alert, which sections the dashboard has and who owns each one.
-Then save it to GitHub.)
+One dashboard, three sections. For this test, one person owns index.html and
+all three sections.
+
+- **suppliers** (`sections/suppliers.js` -> `<div id="suppliers">`): lists
+  every supplier in data/suppliers.csv, each with a risk level (e.g. Low,
+  Medium, High) and a one-line reason for that level.
+- **weather** (`sections/weather.js` -> `<div id="weather">`): today's
+  conditions and any severe weather alerts for each supplier's factory city.
+- **alerts** (`sections/alerts.js` -> `<div id="alerts">`): checks each
+  supplier's website for customer-facing advisories or notices. When
+  something serious appears, shows a ready-to-send email to the purchasing
+  team saying what happened and what to do. Every warning shown must have a
+  real source link and date; the only supplier we invent sample/test alerts
+  for is Cataloochee Cell Works.
