@@ -41,3 +41,9 @@ Units on hand, the safety stock we try never to dip below, weekly usage, and how
 ## open_orders.csv: what's on the way
 
 Purchase orders we've placed that haven't arrived yet, with promised ship and arrival dates and current status.
+
+## laurel-ridge-data.js: the same data, ready for the dashboard
+
+All six files above in one file that web pages can read, even when opened with a double-click. Pages load it with `<script src="data/laurel-ridge-data.js"></script>` and then use `window.LAUREL_RIDGE`, which holds `suppliers`, `parts`, `products`, `bom`, `inventory` and `openOrders`.
+
+If you change a CSV file, ask Claude to update this file to match.
