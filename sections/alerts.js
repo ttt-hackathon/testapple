@@ -1,6 +1,7 @@
 // Alerts section: fills <div id="alerts"> with the result of checking supplier websites for advisories.
 // A web page can only read another website if that site allows it, and only Cataloochee Cell Works
-// publishes a machine-readable advisories feed. Every other supplier is listed as "check manually".
+// publishes a machine-readable advisories feed. For every other supplier, this section shows the
+// findings saved in data/signals.js (window.SIGNALS) from a web search of their news.
 // High-severity advisories also show as a red banner at the top of the dashboard, with an email draft.
 (function () {
   // Suppliers whose advisories a web page can read automatically: supplier_id -> feed + page.
@@ -77,6 +78,12 @@
     '#alerts .alerts-note{margin:0 0 14px;color:#5b6b62;font-size:14px}' +
     '#alerts .alerts-row{border-top:1px solid #ddd8cc;padding:8px 0;font-size:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}' +
     '#alerts .alerts-sub{color:#5b6b62}' +
+    '#alerts .alerts-right{flex:1 1 60%;max-width:70%}' +
+    '#alerts .alerts-item{margin-bottom:6px}' +
+    '#alerts .alerts-sev{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase}' +
+    '#alerts .alerts-sev-low{background:#d6ecdd;color:#1d5a37}' +
+    '#alerts .alerts-sev-medium{background:#fbe8b8;color:#6b4a00}' +
+    '#alerts .alerts-sev-high{background:#f8d7d3;color:#8a1c12}' +
     '#alerts .alerts-ok{color:#1d5a37;font-weight:600}' +
     '#alerts .alerts-email{margin-top:10px;border:1px solid #ddd8cc;border-radius:8px;padding:12px;background:#faf9f5}' +
     '#alerts .alerts-email pre{white-space:pre-wrap;font:13px/1.5 ui-monospace,Consolas,monospace;margin:8px 0}' +
@@ -115,21 +122,31 @@
 
     Promise.all(results).then(function (res) {
       var highs = [];
+      var signals = Array.isArray(window.SIGNALS) ? window.SIGNALS : [];
       res.forEach(function (r) {
-        if (r.status === 'ok') r.list.filter(isHigh).forEach(function (a) { highs.push({ s: r.s, a: a, feed: r.feed }); });
+        if (r.status === 'ok') r.list.filter(isHigh).forEach(function (a) {
+          highs.push({ s: r.s, a: a, link: r.feed.page + '#' + a.id, label: r.s.supplier_name + ' advisory ' + a.id });
+        });
+        // Web-search findings (data/signals.js): treat a high-severity item like a high advisory.
+        signals.filter(function (g) { return g.supplier_id === r.s.supplier_id && g.severity === 'high' && g.source; }).forEach(function (g) {
+          highs.push({
+            s: r.s, link: g.source, label: 'news source',
+            a: { id: 'news', title: g.headline, details: g.summary, date: g.date, severity: 'high', status: 'active', products_affected: [] }
+          });
+        });
       });
       setBanner(highs);
 
       var checked = res.filter(function (r) { return r.status === 'ok'; }).length;
       var html = CSS + '<h2>Supplier advisories</h2><p class="alerts-note">' + checked + ' of ' + res.length +
-        ' suppliers publish advisories a web page can read automatically; the rest need a manual check. ' +
-        (highs.length ? highs.length + ' high-severity advisory found.' : 'No high-severity advisories right now.') + '</p>';
+        ' suppliers publish advisories a web page can read automatically. For the others, findings come from a web search of the last 30 days (saved in data/signals.js). ' +
+        (highs.length ? highs.length + ' high-severity item found.' : 'No high-severity items right now.') + '</p>';
 
       highs.forEach(function (x, i) {
-        var link = x.feed.page + '#' + x.a.id;
+        var link = x.link;
         var m = buildEmail(x.s, x.a, link, d);
         html += '<div class="alerts-email"><strong>Ready-to-send email to purchasing</strong> ' +
-          '<span class="alerts-sub">· Source: <a href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(x.s.supplier_name) + ' advisory ' + esc(x.a.id) + '</a>, ' + esc(niceDate(x.a.date)) + '</span>' +
+          '<span class="alerts-sub">· Source: <a href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(x.label) + '</a>, ' + esc(niceDate(x.a.date)) + '</span>' +
           '<pre id="alerts-email-' + i + '"><strong>Subject: ' + esc(m.subject) + '</strong>\n\n' + esc(m.body) + '</pre>' +
           '<a class="alerts-btn" href="mailto:?subject=' + encodeURIComponent(m.subject) + '&body=' + encodeURIComponent(m.body) + '">Open in my email</a>' +
           '<button class="alerts-btn" data-alerts-copy="' + i + '">Copy email</button></div>';
@@ -147,9 +164,22 @@
         } else if (r.status === 'error') {
           right = '<span style="color:#8a1c12">Could not read advisories (' + esc(r.error) + ')</span> <span class="alerts-sub">(<a href="' + esc(r.feed.page) + '" target="_blank" rel="noopener">check page</a>)</span>';
         } else {
-          right = '<span class="alerts-sub">Cannot be checked automatically. Please check their ' + site + ' by hand.</span>';
+          var mine = signals.filter(function (g) { return g.supplier_id === r.s.supplier_id; });
+          var found = mine.filter(function (g) { return g.severity !== 'none'; });
+          var none = mine.filter(function (g) { return g.severity === 'none'; })[0];
+          if (found.length) {
+            right = found.map(function (g) {
+              return '<div class="alerts-item"><span class="alerts-sev alerts-sev-' + esc(g.severity) + '">' + esc(g.severity) + '</span> ' +
+                '<strong>' + esc(g.headline) + '</strong> <span class="alerts-sub">(' + esc(niceDate(g.date)) + ', <a href="' + esc(g.source) + '" target="_blank" rel="noopener">source</a>)</span>' +
+                '<div class="alerts-sub">' + esc(g.summary) + '</div></div>';
+            }).join('');
+          } else if (none) {
+            right = '<span class="alerts-ok">Checked ' + esc(niceDate(none.checked)) + ', nothing found</span><div class="alerts-sub">' + esc(none.summary) + ' <a href="' + esc(r.s.website) + '" target="_blank" rel="noopener">Website</a></div>';
+          } else {
+            right = '<span class="alerts-sub">Not checked yet. Please check their ' + site + ' by hand.</span>';
+          }
         }
-        html += '<div class="alerts-row"><strong>' + esc(r.s.supplier_name) + '</strong><span>' + right + '</span></div>';
+        html += '<div class="alerts-row"><strong>' + esc(r.s.supplier_name) + '</strong><span class="alerts-right">' + right + '</span></div>';
       });
 
       box.innerHTML = html;
